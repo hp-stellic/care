@@ -11,9 +11,9 @@ function getApiKey() {
 }
 
 type TranscriptResponse = {
-  transcript?: string;
+  transcript?: string | Array<{ text?: string }>;
   data?: {
-    transcript?: string;
+    transcript?: string | Array<{ text?: string }>;
     utterances?: Array<{ text?: string }>;
   };
   utterances?: Array<{ text?: string }>;
@@ -25,11 +25,31 @@ function extractTranscript(payload: TranscriptResponse) {
     return payload.transcript;
   }
 
+  if (Array.isArray(payload.transcript)) {
+    const transcript = payload.transcript
+      .map((item) => item?.text?.trim())
+      .filter(Boolean)
+      .join("\n");
+    if (transcript) {
+      return transcript;
+    }
+  }
+
   if (
     typeof payload.data?.transcript === "string" &&
     payload.data.transcript.trim()
   ) {
     return payload.data.transcript;
+  }
+
+  if (Array.isArray(payload.data?.transcript)) {
+    const transcript = payload.data.transcript
+      .map((item) => item?.text?.trim())
+      .filter(Boolean)
+      .join("\n");
+    if (transcript) {
+      return transcript;
+    }
   }
 
   const utterances = payload.utterances ?? payload.data?.utterances;
@@ -70,6 +90,7 @@ export async function GET(
       `${FATHOM_BASE_URL}/recordings/${recordingId}/transcript`,
       {
         headers: {
+          "X-Api-Key": apiKey,
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
         },

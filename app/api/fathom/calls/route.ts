@@ -51,7 +51,7 @@ export async function GET() {
 
     const response = await fetch(`${FATHOM_BASE_URL}/meetings`, {
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        "X-Api-Key": apiKey,
         "Content-Type": "application/json",
       },
       cache: "no-store",
@@ -66,8 +66,10 @@ export async function GET() {
     }
 
     const payload = await response.json();
-    const meetings: FathomMeeting[] = Array.isArray(payload?.meetings)
-      ? payload.meetings
+    const meetings: FathomMeeting[] = Array.isArray(payload?.items)
+      ? payload.items
+      : Array.isArray(payload?.meetings)
+        ? payload.meetings
       : Array.isArray(payload?.data)
         ? payload.data
         : [];
