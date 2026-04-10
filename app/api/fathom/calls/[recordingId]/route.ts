@@ -1,14 +1,5 @@
 import { NextResponse } from "next/server";
-
-const FATHOM_BASE_URL = "https://api.fathom.ai/external/v1";
-
-function getApiKey() {
-  const apiKey = process.env.FATHOM_API_KEY;
-  if (!apiKey) {
-    throw new Error("FATHOM_API_KEY is not set");
-  }
-  return apiKey;
-}
+import { fetchFromFathom } from "../../_lib/fathom";
 
 type TranscriptResponse = {
   transcript?: string | Array<{ text?: string }>;
@@ -84,24 +75,20 @@ export async function GET(
 ) {
   try {
     const { recordingId } = await context.params;
-    const apiKey = getApiKey();
-
-    const response = await fetch(
-      `${FATHOM_BASE_URL}/recordings/${recordingId}/transcript`,
-      {
-        headers: {
-          "X-Api-Key": apiKey,
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        cache: "no-store",
-      },
-    );
+    const response = await fetchFromFathom(`/recordings/${recordingId}/transcript`);
 
     if (!response.ok) {
       const body = await response.text();
       return NextResponse.json(
-        { error: "Failed to fetch transcript", details: body },
+        {
+          error: "Failed to fetch transcript",
+          status: response.status,
+          details: body || "No details returned by Fathom.",
+          hint:
+            response.status === 401
+              ? "Check FATHOM_API_KEY in .env.local and restart the dev server."
+              : undefined,
+        },
         { status: response.status },
       );
     }

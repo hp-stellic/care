@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type CallSummary = {
-  recordingId: number;
+  recordingId: string;
   title: string;
   date: string | null;
   durationSeconds: number;
@@ -39,7 +39,7 @@ export default function Home() {
   const [calls, setCalls] = useState<CallSummary[]>([]);
   const [callsLoading, setCallsLoading] = useState(true);
   const [callsError, setCallsError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState<string>("");
   const [transcriptLoading, setTranscriptLoading] = useState(false);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
@@ -54,7 +54,11 @@ export default function Home() {
         const payload = await response.json();
 
         if (!response.ok) {
-          throw new Error(payload?.error || "Failed to load calls");
+          throw new Error(
+            payload?.details
+              ? `${payload?.error || "Failed to load calls"}: ${payload.details}`
+              : payload?.error || "Failed to load calls",
+          );
         }
 
         const nextCalls: CallSummary[] = Array.isArray(payload?.calls)
@@ -73,7 +77,7 @@ export default function Home() {
     loadCalls();
   }, []);
 
-  async function loadTranscript(recordingId: number) {
+  async function loadTranscript(recordingId: string) {
     try {
       setSelectedId(recordingId);
       setTranscript("");
@@ -84,7 +88,11 @@ export default function Home() {
       const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.error || "Failed to load transcript");
+        throw new Error(
+          payload?.details
+            ? `${payload?.error || "Failed to load transcript"}: ${payload.details}`
+            : payload?.error || "Failed to load transcript",
+        );
       }
 
       setTranscript(payload?.transcript || "");

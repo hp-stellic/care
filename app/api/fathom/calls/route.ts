@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
-
-const FATHOM_BASE_URL = "https://api.fathom.ai/external/v1";
-
-function getApiKey() {
-  const apiKey = process.env.FATHOM_API_KEY;
-  if (!apiKey) {
-    throw new Error("FATHOM_API_KEY is not set");
-  }
-  return apiKey;
-}
+import { fetchFromFathom } from "../_lib/fathom";
 
 type FathomMeeting = {
-  recording_id?: number;
+  recording_id?: number | string;
+  recordingId?: number | string;
+  id?: number | string;
   title?: string;
   meeting_title?: string;
   created_at?: string;
@@ -19,12 +12,21 @@ type FathomMeeting = {
   recording_end_time?: string;
   scheduled_start_time?: string;
   scheduled_end_time?: string;
-  duration?: number;
+  duration?: number | string;
 };
 
 function getDurationInSeconds(meeting: FathomMeeting) {
   if (typeof meeting.duration === "number") {
     return meeting.duration;
+  }
+  if (typeof meeting.duration === "string") {
+    const parts = meeting.duration.split(":").map((part) => Number(part));
+    if (
+      parts.length === 3 &&
+      parts.every((part) => Number.isFinite(part) && part >= 0)
+    ) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
   }
 
   const start =
@@ -45,22 +47,31 @@ function getDurationInSeconds(meeting: FathomMeeting) {
   return Math.round((endMs - startMs) / 1000);
 }
 
+function getRecordingId(meeting: FathomMeeting): string | null {
+  const candidate = meeting.recording_id ?? meeting.recordingId ?? meeting.id;
+  if (candidate === null || candidate === undefined) {
+    return null;
+  }
+  const value = String(candidate).trim();
+  return value ? value : null;
+}
+
 export async function GET() {
   try {
-    const apiKey = getApiKey();
-
-    const response = await fetch(`${FATHOM_BASE_URL}/meetings`, {
-      headers: {
-        "X-Api-Key": apiKey,
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-    });
+    const response = await fetchFromFathom("/meetings");
 
     if (!response.ok) {
       const body = await response.text();
       return NextResponse.json(
-        { error: "Failed to fetch Fathom calls", details: body },
+        {
+          error: "Failed to fetch Fathom calls",
+          details: body,
+          status: response.status,
+          hint:
+            response.status === 401
+              ? "Check FATHOM_API_KEY in .env.local and restart the dev server."
+              : undefined,
+        },
         { status: response.status },
       );
     }
@@ -70,18 +81,20 @@ export async function GET() {
       ? payload.items
       : Array.isArray(payload?.meetings)
         ? payload.meetings
+      : Array.isArray(payload?.results)
+        ? payload.results
       : Array.isArray(payload?.data)
         ? payload.data
         : [];
 
     const calls = meetings
-      .filter((meeting) => typeof meeting.recording_id === "number")
       .map((meeting) => ({
-        recordingId: meeting.recording_id as number,
+        recordingId: getRecordingId(meeting),
         title: meeting.title || meeting.meeting_title || "Untitled call",
         date: meeting.created_at || meeting.recording_start_time || null,
         durationSeconds: getDurationInSeconds(meeting),
-      }));
+      }))
+      .filter((meeting) => Boolean(meeting.recordingId));
 
     return NextResponse.json({ calls });
   } catch (error) {
